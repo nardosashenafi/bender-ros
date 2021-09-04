@@ -10,12 +10,25 @@ namespace bender_perception
 
 class LaneLayer : public costmap_2d::CostmapLayer
 {
-    LaneLayer()
-    {
-        costmap_ = NULL;  // this is the unsigned char* member of parent class Costmap2D.
-    }
+    public:
+        LaneLayer()
+        {
+            costmap_ = NULL;  // this is the unsigned char* member of parent class Costmap2D.
+        }
 
-    virtual ~LaneLayer();
+        ~LaneLayer();
+        void onInitialize() override;
+        void updateBounds(double robot_x, double robot_y, double robot_yaw, 
+                            double* min_x, double* min_y,
+                            double* max_x, double* max_y) override;
+        void updateCosts(costmap_2d::Costmap2D& master_grid, 
+                            int min_i, int min_j, 
+                            int max_i, int max_j) override;
+        void activate() override;
+        void deactivate() override;
+        void reset() override;
+    
+    protected:
 };
 
 } // namespace bender_perception
