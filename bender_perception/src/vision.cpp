@@ -1,5 +1,7 @@
 #include <bender_perception/vision.h>
 
+namespace bender_perception
+{
 
 LaneDetection::LaneDetection(ros::NodeHandle *nh, int device_id) :
     device_id_(device_id),
@@ -246,3 +248,5 @@ void LaneDetection::publishQuantized()
         output_pub_.publish(output_msg_);
     }
 }
+
+} // namespace bender_perception

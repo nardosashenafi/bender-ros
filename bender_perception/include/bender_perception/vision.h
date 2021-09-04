@@ -10,6 +10,10 @@
 #include <image_geometry/pinhole_camera_model.h>
 #include <tf2_ros/transform_listener.h>
 
+
+namespace bender_perception
+{
+
 using namespace cv;
 using namespace std;
 
@@ -121,5 +125,6 @@ class LaneDetection
         void init(ros::NodeHandle *nh);
 }; 
 
+} // namespace bender_perception
 
 #endif // BENDER_PERCEPTION_VISION_H

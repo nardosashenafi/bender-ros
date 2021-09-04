@@ -12,6 +12,9 @@
  * http://wiki.ros.org/ROSNodeTutorialC++
  */
 
+namespace bender_perception
+{
+
 using namespace std;
 
 class BarrelDetection
@@ -24,6 +27,7 @@ class BarrelDetection
         ros::Subscriber input_sub_;
         const string input_topic_;
 }; // class BarrelDetection
-    
+
+} // namespace bender_perception    
 
 #endif // BENDER_PERCEPTION_LIDAR_H

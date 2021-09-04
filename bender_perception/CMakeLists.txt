@@ -6,6 +6,7 @@ find_package(catkin REQUIRED COMPONENTS
   image_transport
   image_geometry
   nav_msgs
+  pluginlib
   roscpp
   rospy
   sensor_msgs
@@ -16,7 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 catkin_package(
  INCLUDE_DIRS include
- LIBRARIES ${PROJECT_NAME} 
+ LIBRARIES ${PROJECT_NAME} bender_perception_lib layers
  CATKIN_DEPENDS ${${PROJECT_NAME}_CATKIN_DEPS}
 )
 
@@ -41,6 +42,17 @@ add_dependencies(bender_perception_lib
 target_link_libraries(bender_perception_lib
   ${OpenCV_LIBS}
   ${catkin_LIBRARIES}  
+)
+
+add_library(layers
+  plugins/costmap_lane_layer.cpp
+)
+add_dependencies(layers 
+  ${${PROJECT_NAME}_EXPORTED_TARGETS} 
+  ${catkin_EXPORTED_TARGETS}
+)
+target_link_libraries(layers
+  bender_perception_lib
 )
 
 add_executable(${PROJECT_NAME} src/bender_perception.cpp)

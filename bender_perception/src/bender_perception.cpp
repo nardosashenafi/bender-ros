@@ -1,6 +1,7 @@
 #include <bender_perception/vision.h>
 #include <bender_perception/lidar.h>
 
+using namespace bender_perception;
 
 int main (int argc, char **argv)
 {
