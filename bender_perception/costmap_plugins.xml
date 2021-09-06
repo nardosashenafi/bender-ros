@@ -1,5 +1,5 @@
 <class_libraries>
-  <library path="liblayers">
+  <library path="libcostmap_layers">
     <class type="bender_perception::LaneLayer" base_class_type="costmap_2d::Layer">
       <description>This plugin subscribes to a binary image and put it on a map.</description>
     </class>

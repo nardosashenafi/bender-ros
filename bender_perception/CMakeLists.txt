@@ -17,7 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 catkin_package(
  INCLUDE_DIRS include
- LIBRARIES ${PROJECT_NAME} bender_perception_lib layers
+ LIBRARIES ${PROJECT_NAME} ${PROJECT_NAME}_core costmap_layers
  CATKIN_DEPENDS ${${PROJECT_NAME}_CATKIN_DEPS}
 )
 
@@ -31,32 +31,53 @@ include_directories(
   ${OpenCV_INCLUDE_DIRS}
 )
 
-add_library(bender_perception_lib
+add_library(${PROJECT_NAME}_core
   src/vision.cpp 
   src/lidar.cpp
 )
-add_dependencies(bender_perception_lib 
+add_dependencies(${PROJECT_NAME}_core 
   ${${PROJECT_NAME}_EXPORTED_TARGETS} 
   ${catkin_EXPORTED_TARGETS}
 )
-target_link_libraries(bender_perception_lib
+target_link_libraries(${PROJECT_NAME}_core
   ${OpenCV_LIBS}
   ${catkin_LIBRARIES}  
 )
 
-add_library(layers
+add_library(costmap_layers
   plugins/costmap_lane_layer.cpp
 )
-add_dependencies(layers 
+add_dependencies(costmap_layers 
   ${${PROJECT_NAME}_EXPORTED_TARGETS} 
   ${catkin_EXPORTED_TARGETS}
 )
-target_link_libraries(layers
-  bender_perception_lib
+target_link_libraries(costmap_layers
+  ${PROJECT_NAME}_core
 )
 
 add_executable(${PROJECT_NAME} src/bender_perception.cpp)
 target_link_libraries(${PROJECT_NAME} 
-  bender_perception_lib
+  ${PROJECT_NAME}_core
   ${catkin_LIBRARIES} 
+)
+
+#############
+## Install ##
+#############
+
+install(TARGETS
+  ${PROJECT_NAME}_core
+  costmap_layers
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
+)
+
+install(FILES costmap_plugins.xml
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
+
+install(DIRECTORY include/${PROJECT_NAME}/
+  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+  PATTERN ".svn" EXCLUDE
 )
