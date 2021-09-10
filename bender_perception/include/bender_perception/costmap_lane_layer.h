@@ -29,6 +29,8 @@ class LaneLayer : public costmap_2d::CostmapLayer
         void reset() override;
     
     protected:
+        std::string global_frame_;
+        bool rolling_window_;
 };
 
 } // namespace bender_perception
