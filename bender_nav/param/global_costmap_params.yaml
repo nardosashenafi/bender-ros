@@ -1,10 +1,8 @@
 global_costmap:
-  update_frequency: 1.0
-  publish_frequency: 0.5
-  rolling_window: true
-  width: 10
-  height: 10
-  resolution: 0.1
+  update_frequency: 5.0
+  publish_frequency: 1.0
+  rolling_window: false
+  always_send_full_costmap: false
   plugins:
     - {name: lane_layer,      type: "costmap_2d::StaticLayer"}
     # - {name: obstacle_truth,  type: "costmap_2d::StaticLayer"}
