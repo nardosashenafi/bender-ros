@@ -1,6 +1,7 @@
 #! /usr/bin/python3
 
 __author__ = 'NardosAshenafi'
+from email.mime import base
 import roslib
 # roslib.load_manifest('bender_nav')
 import rospy
@@ -15,7 +16,7 @@ import numpy as np
 import math
 from map_msgs.msg import OccupancyGridUpdate
 import matplotlib.pyplot as plt
-import copy, operator 
+from scipy.optimize import curve_fit 
 
 class Costmap:
     def __init__(self):
@@ -24,6 +25,7 @@ class Costmap:
         self.q_g_lm         = None
         self.q_g_r          = None
         self.o_lm_map       = None
+        self.o_r_map        = None
         self.num_steps      = 1
         self.w              = 0
         self.h              = 0
@@ -38,8 +40,8 @@ class Costmap:
         print("update cost size = ", len(cost))
         print("sum of cost = ", np.sum(cost))
 
-        self.w              = data.width
-        self.h              = data.height
+        self.w              = data.info.width
+        self.h              = data.info.height
         self.resolution      = 0.1
 
         self.cost_arr       = np.zeros((self.h, self.w))
@@ -156,18 +158,87 @@ class Costmap:
 
         return vf_on_arc
 
+    def identify_lanes(self):
+        #given agent heading, this functions finds the two lanes. To do so, we first create histogram of all the columns and row
+        #to find the base of each lane. Then we use a 5x5 sliding window to move from the base of the lane to the top edge.
+        #We save and return each lane separately
+
+        collapsed_col = self.vf[:,np.size(self.vf, 1)]
+        # for i in range(np.size(self.vf, 1)-1, 1, -1):
+        for i in range(np.size(self.vf, 1)-1, np.floor(np.size(self.vf, 1)/2), -1): #check half of the costmap grid (around curves histogram will be shifted at base)
+            collapsed_col = 1.0/4.0*(collapsed_col + self.vf[0:-2,i-1] + self.vf[1:-1,i-1] + self.vf[:,i-1])
+
+        collapsed_row = self.vf[:,np.size(self.vf, 0)]
+        # for j in range(1, np.size(self.vf, 0)-1):
+        for j in range(1, np.floor(np.size(self.vf, 0)/2)): #check half of the costmap grid (around curves histogram will be shifted at base)
+            collapsed_row = 1.0/4.0*(collapsed_row + self.vf[j+1, 0:-2] + self.vf[j+1, 1:-1] + self.vf[j+1, :])
+
+        base_lanes_col = np.sort(collapsed_col)[-2:]
+        base_lanes_row = np.sort(collapsed_row)[-2:]
+
+        win_size = 5
+        #pick row or column; may pick one of each if the agent is on a curve
+        if np.sum(base_lanes_col) >= np.sum(base_lanes_row):
+            base        = base_lanes_col 
+            search_dirc = range(np.size(self.vf, 1)-win_size, win_size, -win_size)
+            def sliding_window(arr, i, j) :  arr[j-win_size:j+win_size,i-win_size:i]
+
+        elif np.sum(base_lanes_col) < np.sum(base_lanes_row):
+            base        = base_lanes_row 
+            search_dirc = range(win_size, np.size(self.vf, 1)-win_size, win_size)
+            def sliding_window(arr, i, j) :  arr[j:j+win_size,i-win_size:i+win_size]
+
+        print("base = ", base)
+
+        #create the sliding window
+
+        lane1 = []
+        lane2 = []
+        lane1.append(base[0])
+        lane2.append(base[1])
+
+        for i in search_dirc:
+            #check moving base plus 5x5 sliding window; pick one index for every 5x5 window to curve fit
+            lane1_point = lane1[-1] + np.argmax(sliding_window(self.vf, lane1[-1][0], lane1[-1][1]))
+            lane2_point = lane2[-1] + np.argmax(sliding_window(self.vf, lane2[-1][0], lane2[-1][1]))
+            lane1.append(lane1_point)
+            lane2.append(lane2_point)
+
+        return lane1, lane2
+
+
+    def lane_fit(self, x, a0, a1, a2, a3):
+        return a0 + a1*x + a2*x**2 + a3*x**3
+        
+    # def lane_classify_svm(self, lanes_index):
+        
+
+    def approximate_poly_lane(self):
+        #approximate polynomial fit for each lane
+        lanes_data  = np.unravel_index(np.argwhere(self.cost_arr == np.max(self.cost_arr)), self.cost_arr.shape)[1]
+        x = lanes_data[1][:,0]
+        y = lanes_data[1][:,1]
+
+        #TODO: repeat for each lane
+        #TODO: draw arc in rviz
+        #TODO: if the lanes are not visible (not enough data points for optimizer), handle exception
+
+        popt, cov = curve_fit(self.lane_fit, x, y)
+        a0, a1, a2, a3 = popt 
+        return a0, a1, a2, a3
+        
     def goal_on_arc_wrt_lm(self):
 
         cost_on_arc             = self.arc_cost()
 
-        #TODO: approximate lanes
-        #TODO: find intersection between the lanes and arc
+        # a0, a1, a2, a3          = self.approximate_poly_lane(self)
+        # lanes_index             = self.lane_fit(x, a0, a1, a2, a3)
         lanes_index             = np.argwhere(cost_on_arc == np.max(cost_on_arc))   #identify lanes
         search_grid             = [lanes_index[0][0], lanes_index[1][0]]
-        # print(lanes_index)
+        print("lanes_index = ", lanes_index)
         ind = 1
         #make sure two consective indices are not selected
-        while (search_grid[1] - search_grid[0]) < 5:
+        while (search_grid[1] - search_grid[0]) < 10:
             ind += 1
             search_grid[1] = lanes_index[ind][0]
         print("search_grid = ", search_grid)
@@ -203,6 +274,10 @@ class Costmap:
             # cost_in_rng             = self.arc_cost_rng(search_grid[0], search_grid[1])
             # plt.plot(vf_arc)
             # plt.plot(cost_in_rng)
+            #PLOT LANES
+            lane1, lane2 = self.identify_lanes()
+            plt.scatter(lane1[0], lane1[1])
+            plt.scatter(lane2[0], lane2[1])
             plt.show()
         self.counter += 1
 
@@ -227,58 +302,62 @@ class Costmap:
     def transform_r_map(self, listener):
 
         trans, rot = current_position(listener)
+        self.o_r_map.position.x, self.o_r_map.position.y, self.o_r_map.position.z = trans
+        self.o_r_map.orientation.x, self.o_r_map.orientation.y, self.o_r_map.orientation.z, self.o_r_map.orientation.w = rot
+        
         transformer = tf.TransformerROS(True, rospy.Duration(5.0))
         return transformer.fromTranslationRotation(trans, rot)
 
-    def goal_wrt_r(self):
+    def goal_wrt_r(self, T_r_map, T_lm_map):
+
+        self.q_g_r  = np.dot(np.dot(np.linalg.inv(T_r_map),(T_lm_map)), self.q_g_lm)
+        print("q_g_r  = ", self.q_g_r)
+
+
+    # def costmap_update_callback(self, data):
+        
+    #     self.define_parameters(data)
+    #     self.create_vf()
+    #     # self.make_plots()
+    #     # forward_step        = 5      
+    #     # self.min_vf_goal(forward_step)
+    #     self.goal_on_arc_wrt_lm()
+    #     listener = self.goal_wrt_r()
+
+    #     print("goal is = ", self.q_g_r )
+    #     result = setGoalClient(self.q_g_r, listener )
+
+    #     if result:
+    #         rospy.loginfo("Goal execution done!")
+    #         self.num_steps += 1
+
+    def costmap_callback(self, data):
+
+        self.o_lm_map = data.info.origin
+        print("o_lm origin = ", self.o_lm_map)
+        self.define_parameters(data)
+        self.create_vf()
 
         current_pose_listener  = tf.TransformListener()
 
         T_r_map     = self.transform_r_map(current_pose_listener)
         T_lm_map    = self.transform_lm_map()
-        self.q_g_r  = np.dot(np.dot(np.linalg.inv(T_r_map),(T_lm_map)), self.q_g_lm)
-        print("q_g_r  = ", self.q_g_r)
-
-        return current_pose_listener
-
-    def costmap_update_callback(self, data):
-        
-        self.define_parameters(data)
-        self.create_vf()
-        # self.make_plots()
-        # forward_step        = 5      
-        # self.min_vf_goal(forward_step)
         self.goal_on_arc_wrt_lm()
-        listener = self.goal_wrt_r()
+        self.goal_wrt_r(T_r_map, T_lm_map)
 
         print("goal is = ", self.q_g_r )
-        result = setGoalClient(self.q_g_r, listener )
+        result = setGoalClient(self.q_g_r, current_pose_listener )
 
         if result:
             rospy.loginfo("Goal execution done!")
             self.num_steps += 1
-
-    def costmap_callback(self, data):
-        #load costmap data
-        # cost = data.data
-
-        #define constants
-        # size_cost = len(cost)
-
-        # w       = data.info.width
-        # h       = data.info.height
-
-        # print("time of info = ", data.info.map_load_time)
-        # print("origin = ", data.info.origin)
-        # print("resolution = ", data.info.resolution)
-        self.o_lm_map = data.info.origin
-        print("Localmap location updated. This does not mean localcostmap/costmap_updates is updated")
+        # print("Localmap location updated. This does not mean localcostmap/costmap_updates is updated")
 
 
     def costmap_subscriber(self):
 
         rospy.Subscriber("/bender_nav/local_costmap/costmap", OccupancyGrid, self.costmap_callback)
-        rospy.Subscriber("/bender_nav/local_costmap/costmap_updates", OccupancyGridUpdate, self.costmap_update_callback)
+        # rospy.Subscriber("/bender_nav/local_costmap/costmap_updates", OccupancyGridUpdate, self.costmap_update_callback)
 
 def create_pose_stamp(delta_base, frame):
     p                   = PoseStamped()
