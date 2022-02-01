@@ -32,7 +32,7 @@ class Costmap:
         self.R              = 0.0
         self.resolution     = 0.0
         self.cost_arr       = None
-        self.arc_ind        = None
+        self.circle_ind        = None
 
     def define_parameters(self, data):
         #load costmap data
@@ -78,17 +78,17 @@ class Costmap:
 
         return search_grid 
 
-    def arc_around_robot(self):
+    def circle_around_robot(self):
     
         #the x values are sampled finer around x=R, because the formula of circle has more spread around x=R
         xr_coarse       = np.arange(0.0, self.R-2*self.resolution, self.resolution)
         xr_finer        = np.arange(self.R-2*self.resolution, self.R, 0.01)
         xr              = np.concatenate((xr_coarse, xr_finer))
 
-        #The transpose of xr is necessary to arrange the arc indices in a counterclockwise manner.
+        #The transpose of xr is necessary to arrange the circle indices in a counterclockwise manner.
         #otherwise it will be hard to find a goal between lanes indices
         xr_transposed   = xr[::-1]
-        points_on_arc   = np.zeros((2, 4*len(xr)))
+        points_on_circle   = np.zeros((2, 4*len(xr)))
       
 
         #(xr, yr) = (0.0, 0.0) is the location of the robot
@@ -100,91 +100,108 @@ class Costmap:
         #second quadrant
         for i in range(len(xr)):
 
-            points_on_arc[0, i+ind]           = shiftx - xr[i]
-            points_on_arc[1, i+ind]           = shifty + np.sqrt(self.R**2 - xr[i]**2)
+            points_on_circle[0, i+ind]           = shiftx - xr[i]
+            points_on_circle[1, i+ind]           = shifty + np.sqrt(self.R**2 - xr[i]**2)
         
         ind += len(xr)
 
         #third quadrant
         for i in range(len(xr)):    
-            points_on_arc[0, i+ind]         = shiftx - xr_transposed[i]
-            points_on_arc[1, i+ind]         = shifty - np.sqrt(self.R**2 - xr_transposed[i]**2)
+            points_on_circle[0, i+ind]         = shiftx - xr_transposed[i]
+            points_on_circle[1, i+ind]         = shifty - np.sqrt(self.R**2 - xr_transposed[i]**2)
 
         ind += len(xr)
 
         #fourth quadrant
         for i in range(len(xr)):
-            points_on_arc[0, i+ind]         = shiftx + xr[i]
-            points_on_arc[1, i+ind]         = shifty - np.sqrt(self.R**2 - xr[i]**2) 
+            points_on_circle[0, i+ind]         = shiftx + xr[i]
+            points_on_circle[1, i+ind]         = shifty - np.sqrt(self.R**2 - xr[i]**2) 
 
         ind += len(xr)
 
         #first quadrant
         for i in range(len(xr)):
-            points_on_arc[0, i+ind]         = shiftx + xr_transposed[i]
-            points_on_arc[1, i+ind]         = shifty + np.sqrt(self.R**2 - xr_transposed[i]**2)    
+            points_on_circle[0, i+ind]         = shiftx + xr_transposed[i]
+            points_on_circle[1, i+ind]         = shifty + np.sqrt(self.R**2 - xr_transposed[i]**2)    
 
-        # print(points_on_arc)
+        # print(points_on_circle)
         ind += len(xr)
-        self.arc_ind = np.vectorize(math.floor)(points_on_arc*1.0/self.resolution)
+        self.circle_ind = np.vectorize(math.floor)(points_on_circle*1.0/self.resolution)
 
-    def arc_cost(self): 
+    def circle_cost(self): 
 
-        self.arc_around_robot()
-        cost_on_arc             = np.zeros((self.arc_ind.shape[1]))
+        self.circle_around_robot()
+        cost_on_circle             = np.zeros((self.circle_ind.shape[1]))
 
-        #find the cost of each grid on the arc
-        for i in range(self.arc_ind.shape[1]):
-            cost_on_arc[i]   = self.cost_arr[self.arc_ind[1][i]][self.arc_ind[0][i]]
+        #find the cost of each grid on the circle
+        for i in range(self.circle_ind.shape[1]):
+            cost_on_circle[i]   = self.cost_arr[self.circle_ind[1][i]][self.circle_ind[0][i]]
 
-        return cost_on_arc
+        return cost_on_circle
 
-    def arc_cost_rng(self, ind1, ind2): 
+    def circle_cost_rng(self, ind1, ind2): 
 
         cost_in_range   = []
 
         for i in range(ind1, ind2):
-            cost_in_range.append(self.cost_arr[self.arc_ind[1][i]][self.arc_ind[0][i]])
+            cost_in_range.append(self.cost_arr[self.circle_ind[1][i]][self.circle_ind[0][i]])
 
         return cost_in_range
 
-    def arc_vf(self, ind1, ind2):
+    def circle_vf(self, ind1, ind2):
 
-        # self.arc_around_robot()
-        vf_on_arc  = []
+        # self.circle_around_robot()
+        vf_on_circle  = []
 
         for i in range(ind1, ind2):
-            vf_on_arc.append(self.vf[self.arc_ind[1][i]][self.arc_ind[0][i]])
+            vf_on_circle.append(self.vf[self.circle_ind[1][i]][self.circle_ind[0][i]])
 
-        return vf_on_arc
+        return vf_on_circle
 
     def identify_lanes(self):
         #given agent heading, this functions finds the two lanes. To do so, we first create histogram of all the columns and row
         #to find the base of each lane. Then we use a 5x5 sliding window to move from the base of the lane to the top edge.
         #We save and return each lane separately
 
-        collapsed_col = self.vf[:,np.size(self.vf, 1)]
-        # for i in range(np.size(self.vf, 1)-1, 1, -1):
-        for i in range(np.size(self.vf, 1)-1, np.floor(np.size(self.vf, 1)/2), -1): #check half of the costmap grid (around curves histogram will be shifted at base)
-            collapsed_col = 1.0/4.0*(collapsed_col + self.vf[0:-2,i-1] + self.vf[1:-1,i-1] + self.vf[:,i-1])
+        # collapsed_col = self.vf[1:np.size(self.vf, 0)-2,np.size(self.vf, 0)-1]
+        collapsed_col = self.vf[1:np.size(self.vf, 0)-2,0]
 
-        collapsed_row = self.vf[:,np.size(self.vf, 0)]
+        for i in range(0, math.floor(np.size(self.vf, 1)/2)-1, 1): #check half of the costmap grid (around curves histogram will be shifted at base)
+            collapsed_col = 1.0/1.0*(collapsed_col + self.vf[0:-3,i+1] + self.vf[2:-1,i+1] + self.vf[1:-2,i+1])
+
+        # for i in range(np.size(self.vf, 1)-1, math.floor(np.size(self.vf, 1)/2), -1): #check half of the costmap grid (around curves histogram will be shifted at base)
+        #     collapsed_col = 1.0/4.0*(collapsed_col + self.vf[0:-3,i-1] + self.vf[2:-1,i-1] + self.vf[1:-2,i-1])
+
+        collapsed_row = self.vf[0,1:np.size(self.vf, 0)-2]
         # for j in range(1, np.size(self.vf, 0)-1):
-        for j in range(1, np.floor(np.size(self.vf, 0)/2)): #check half of the costmap grid (around curves histogram will be shifted at base)
-            collapsed_row = 1.0/4.0*(collapsed_row + self.vf[j+1, 0:-2] + self.vf[j+1, 1:-1] + self.vf[j+1, :])
+        for j in range(0, math.floor(np.size(self.vf, 0)/2)-1): #check half of the costmap grid (around curves histogram will be shifted at base)
+            collapsed_row = 1.0/1.0*(collapsed_row + self.vf[j+1, 0:-3] + self.vf[j+1, 2:-1] + self.vf[j+1, 1:-2])
 
-        base_lanes_col = np.sort(collapsed_col)[-2:]
-        base_lanes_row = np.sort(collapsed_row)[-2:]
+        # base_lanes_col = np.zeros(2)
+        # base_lanes_row = np.zeros(2)
+        print(collapsed_col)
+        sort_col = np.sort(collapsed_col)
+        sort_row = np.sort(collapsed_row)
+        max_col_ind = np.argwhere(collapsed_col >= sort_col[-10])
+        max_row_ind = np.argwhere(collapsed_row >= sort_row[-10])
+
+        sort_index_col = np.sort(max_col_ind)
+        sort_index_row = np.sort(max_row_ind)
+
+        base_lanes_col = [[sort_index_col[0], 0], [sort_index_col[-1], 0]]
+        base_lanes_row = [[0, sort_index_row[0]], [0, sort_index_row[-1]]]
+
+        #TODO: test the index sorting
 
         win_size = 5
         #pick row or column; may pick one of each if the agent is on a curve
-        if np.sum(base_lanes_col) >= np.sum(base_lanes_row):
-            base        = base_lanes_col 
+        if np.sum(sort_col[-2]) >= np.sum(sort_row[-2]):
+            base        = base_lanes_col
             search_dirc = range(np.size(self.vf, 1)-win_size, win_size, -win_size)
             def sliding_window(arr, i, j) :  arr[j-win_size:j+win_size,i-win_size:i]
 
-        elif np.sum(base_lanes_col) < np.sum(base_lanes_row):
-            base        = base_lanes_row 
+        elif np.sum(sort_col[-2]) < np.sum(sort_row[-2]):
+            base        = base_lanes_row
             search_dirc = range(win_size, np.size(self.vf, 1)-win_size, win_size)
             def sliding_window(arr, i, j) :  arr[j:j+win_size,i-win_size:i+win_size]
 
@@ -206,57 +223,56 @@ class Costmap:
 
         return lane1, lane2
 
-
     def lane_fit(self, x, a0, a1, a2, a3):
-        return a0 + a1*x + a2*x**2 + a3*x**3
-        
-    # def lane_classify_svm(self, lanes_index):
-        
+        return a0 + a1*x + a2*x**2 + a3*x**3                
 
     def approximate_poly_lane(self):
         #approximate polynomial fit for each lane
-        lanes_data  = np.unravel_index(np.argwhere(self.cost_arr == np.max(self.cost_arr)), self.cost_arr.shape)[1]
-        x = lanes_data[1][:,0]
-        y = lanes_data[1][:,1]
+        lane1, lane2 = self.identify_lanes()
+        x1 = lane1[:,0]
+        y1 = lane1[:,1]
+        x2 = lane2[:,0]
+        y2 = lane2[:,1]
 
-        #TODO: repeat for each lane
-        #TODO: draw arc in rviz
+        #TODO: draw circle in rviz
         #TODO: if the lanes are not visible (not enough data points for optimizer), handle exception
 
-        popt, cov = curve_fit(self.lane_fit, x, y)
-        a0, a1, a2, a3 = popt 
-        return a0, a1, a2, a3
+        popt1, cov1 = curve_fit(self.lane_fit, x1, y1)
+        a01, a11, a21, a31 = popt1 
+        popt2, cov2 = curve_fit(self.lane_fit, x2, y2)
+        a02, a12, a22, a32 = popt2 
+        return  a01, a11, a21, a31, a02, a12, a22, a32
         
-    def goal_on_arc_wrt_lm(self):
+    def goal_on_circle_wrt_lm(self):
 
-        cost_on_arc             = self.arc_cost()
+        cost_on_circle             = self.circle_cost()
 
         # a0, a1, a2, a3          = self.approximate_poly_lane(self)
         # lanes_index             = self.lane_fit(x, a0, a1, a2, a3)
-        lanes_index             = np.argwhere(cost_on_arc == np.max(cost_on_arc))   #identify lanes
+        lanes_index             = np.argwhere(cost_on_circle == np.max(cost_on_circle))   #identify lanes
         search_grid             = [lanes_index[0][0], lanes_index[1][0]]
         print("lanes_index = ", lanes_index)
         ind = 1
         #make sure two consective indices are not selected
-        while (search_grid[1] - search_grid[0]) < 10:
+        while (search_grid[1] - search_grid[0]) < 2:
             ind += 1
             search_grid[1] = lanes_index[ind][0]
         print("search_grid = ", search_grid)
-        # print("arc_ind[search_grid] = ", self.arc_ind[0][search_grid[0]:search_grid[1]], self.arc_ind[1][search_grid[0]:search_grid[1]])
+        # print("circle_ind[search_grid] = ", self.circle_ind[0][search_grid[0]:search_grid[1]], self.circle_ind[1][search_grid[0]:search_grid[1]])
 
         #select minimum value function
-        vf_on_arc_in_lanes      = self.arc_vf(search_grid[0], search_grid[1])
+        vf_on_circle_in_lanes      = self.circle_vf(search_grid[0], search_grid[1])
         
-        min_ind                 = search_grid[0] + np.argmin(vf_on_arc_in_lanes)
+        min_ind                 = search_grid[0] + np.argmin(vf_on_circle_in_lanes)
         # print("min_ind = ", min_ind)
-        min_cost_ind            = [self.arc_ind[0, min_ind], self.arc_ind[1, min_ind]]
-        min_cost                = np.min(vf_on_arc_in_lanes)
+        min_cost_ind            = [self.circle_ind[0, min_ind], self.circle_ind[1, min_ind]]
+        min_cost                = np.min(vf_on_circle_in_lanes)
        
         self.q_g_lm     = tuple(np.multiply((min_cost_ind[0], min_cost_ind[1] , 0.0, 1.0/self.resolution), self.resolution))
         print("q_g_lm = ", self.q_g_lm)
-        # self.make_plots(search_grid, lanes_index, min_cost_ind)
+        self.make_plots(search_grid, lanes_index, min_cost_ind)
 
-    def make_plots(self, search_grid, lanes_index, min_cost_ind):
+    def make_plots(self):
 
         if self.counter == 1: 
             # plt.plot([self.cost_arr[i][forward_step] for i in range(0, self.h)])
@@ -265,14 +281,14 @@ class Costmap:
             y       = range(0, self.h)
             X, Y    = np.meshgrid(x, y)
             plt.pcolormesh(X, Y, self.vf)
-            # #plot arc using self.arc_ind
-            plt.scatter(self.arc_ind[0], self.arc_ind[1])
-            plt.scatter(self.arc_ind[0][lanes_index], self.arc_ind[1][lanes_index])
-            plt.scatter(self.arc_ind[0][search_grid[0]:search_grid[1]], self.arc_ind[1][search_grid[0]:search_grid[1]])
-            plt.scatter(min_cost_ind[0], min_cost_ind[1])
-            # vf_arc      = self.arc_vf(search_grid[0], search_grid[1])
-            # cost_in_rng             = self.arc_cost_rng(search_grid[0], search_grid[1])
-            # plt.plot(vf_arc)
+            # #plot circle using self.circle_ind
+            # plt.scatter(self.circle_ind[0], self.circle_ind[1])
+            # plt.scatter(self.circle_ind[0][lanes_index], self.circle_ind[1][lanes_index])
+            # plt.scatter(self.circle_ind[0][search_grid[0]:search_grid[1]], self.circle_ind[1][search_grid[0]:search_grid[1]])
+            # plt.scatter(min_cost_ind[0], min_cost_ind[1])
+            # vf_circle      = self.circle_vf(search_grid[0], search_grid[1])
+            # cost_in_rng             = self.circle_cost_rng(search_grid[0], search_grid[1])
+            # plt.plot(vf_circle)
             # plt.plot(cost_in_rng)
             #PLOT LANES
             lane1, lane2 = self.identify_lanes()
@@ -302,8 +318,8 @@ class Costmap:
     def transform_r_map(self, listener):
 
         trans, rot = current_position(listener)
-        self.o_r_map.position.x, self.o_r_map.position.y, self.o_r_map.position.z = trans
-        self.o_r_map.orientation.x, self.o_r_map.orientation.y, self.o_r_map.orientation.z, self.o_r_map.orientation.w = rot
+        self.o_r_map = create_pose_stamp(trans, 'map')
+        self.o_r_map.pose.orientation.x, self.o_r_map.pose.orientation.y, self.o_r_map.pose.orientation.z, self.o_r_map.pose.orientation.w = rot
         
         transformer = tf.TransformerROS(True, rospy.Duration(5.0))
         return transformer.fromTranslationRotation(trans, rot)
@@ -321,7 +337,7 @@ class Costmap:
     #     # self.make_plots()
     #     # forward_step        = 5      
     #     # self.min_vf_goal(forward_step)
-    #     self.goal_on_arc_wrt_lm()
+    #     self.goal_on_circle_wrt_lm()
     #     listener = self.goal_wrt_r()
 
     #     print("goal is = ", self.q_g_r )
@@ -337,20 +353,21 @@ class Costmap:
         print("o_lm origin = ", self.o_lm_map)
         self.define_parameters(data)
         self.create_vf()
+        self.make_plots()
 
-        current_pose_listener  = tf.TransformListener()
+        # current_pose_listener  = tf.TransformListener()
 
-        T_r_map     = self.transform_r_map(current_pose_listener)
-        T_lm_map    = self.transform_lm_map()
-        self.goal_on_arc_wrt_lm()
-        self.goal_wrt_r(T_r_map, T_lm_map)
+        # T_r_map     = self.transform_r_map(current_pose_listener)
+        # T_lm_map    = self.transform_lm_map()
+        # self.goal_on_circle_wrt_lm()
+        # self.goal_wrt_r(T_r_map, T_lm_map)
 
-        print("goal is = ", self.q_g_r )
-        result = setGoalClient(self.q_g_r, current_pose_listener )
+        # print("goal is = ", self.q_g_r )
+        # result = setGoalClient(self.q_g_r, current_pose_listener )
 
-        if result:
-            rospy.loginfo("Goal execution done!")
-            self.num_steps += 1
+        # if result:
+        #     rospy.loginfo("Goal execution done!")
+        #     self.num_steps += 1
         # print("Localmap location updated. This does not mean localcostmap/costmap_updates is updated")
 
 
