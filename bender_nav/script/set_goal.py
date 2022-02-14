@@ -177,43 +177,47 @@ class Costmap:
         for j in range(0, math.floor(np.size(self.vf, 0)/2)-1): #check half of the costmap grid (around curves histogram will be shifted at base)
             collapsed_row = 1.0/1.0*(collapsed_row + self.vf[j+1, 0:-3] + self.vf[j+1, 2:-1] + self.vf[j+1, 1:-2])
 
-        # base_lanes_col = np.zeros(2)
-        # base_lanes_row = np.zeros(2)
-        print(collapsed_col)
         sort_col = np.sort(collapsed_col)
         sort_row = np.sort(collapsed_row)
-        max_col_ind = np.argwhere(collapsed_col >= sort_col[-10])
-        max_row_ind = np.argwhere(collapsed_row >= sort_row[-10])
+        max_col_ind = np.argwhere(collapsed_col >= sort_col[-50])
+        max_row_ind = np.argwhere(collapsed_row >= sort_row[-50])
 
-        sort_index_col = np.sort(max_col_ind)
-        sort_index_row = np.sort(max_row_ind)
+        # sort_index_col = np.sort(max_col_ind)       #extra caution, argwhere normally sorts
+        # sort_index_row = np.sort(max_row_ind)
 
-        base_lanes_col = [[sort_index_col[0], 0], [sort_index_col[-1], 0]]
-        base_lanes_row = [[0, sort_index_row[0]], [0, sort_index_row[-1]]]
+        base_lanes_col_ind = [[max_col_ind[0][0], max_col_ind[-1][0]]]
+        base_lanes_row_ind = [[max_row_ind[0][0], max_row_ind[-1][0]]]
+
+        base_lanes_col = collapsed_col[tuple(base_lanes_col_ind)]
+        base_lanes_row = collapsed_row[tuple(base_lanes_row_ind)]
 
         #TODO: test the index sorting
 
-        win_size = 5
+        win_size = 4
         #pick row or column; may pick one of each if the agent is on a curve
-        if np.sum(sort_col[-2]) >= np.sum(sort_row[-2]):
-            base        = base_lanes_col
+        if np.sum(base_lanes_col) >= np.sum(base_lanes_row):
+            base        = base_lanes_col_ind
             search_dirc = range(np.size(self.vf, 1)-win_size, win_size, -win_size)
-            def sliding_window(arr, i, j) :  arr[j-win_size:j+win_size,i-win_size:i]
+            lane1 = []
+            lane2 = []
+            lane1.append(np.array([base[0][0], 0]))
+            lane2.append(np.array([base[0][1], 0]))
+            def sliding_window(arr, j, i) :  return arr[j-win_size:j+win_size][i:i+win_size]
 
-        elif np.sum(sort_col[-2]) < np.sum(sort_row[-2]):
-            base        = base_lanes_row
+        elif np.sum(base_lanes_col) < np.sum(base_lanes_row):
+            base        = base_lanes_row_ind
             search_dirc = range(win_size, np.size(self.vf, 1)-win_size, win_size)
-            def sliding_window(arr, i, j) :  arr[j:j+win_size,i-win_size:i+win_size]
+            lane1 = []
+            lane2 = []
+            lane1.append(np.array([0, base[0][0]]))
+            lane2.append(np.array([0, base[0][1]]))
+            def sliding_window(arr, j, i) :  return arr[j:j+win_size][i-win_size:i+win_size]
 
         print("base = ", base)
 
         #create the sliding window
-
-        lane1 = []
-        lane2 = []
-        lane1.append(base[0])
-        lane2.append(base[1])
-
+        print("self.vf = ", self.vf[119:125][0:5])
+        print("sliding window = ", sliding_window(self.vf, lane1[-1][0], lane1[-1][1]))
         for i in search_dirc:
             #check moving base plus 5x5 sliding window; pick one index for every 5x5 window to curve fit
             lane1_point = lane1[-1] + np.argmax(sliding_window(self.vf, lane1[-1][0], lane1[-1][1]))
@@ -221,6 +225,8 @@ class Costmap:
             lane1.append(lane1_point)
             lane2.append(lane2_point)
 
+        print("lane1 = ", lane1)
+        print("last lane = ", lane1[-1])
         return lane1, lane2
 
     def lane_fit(self, x, a0, a1, a2, a3):
