@@ -390,7 +390,7 @@ class Costmap():
 
         # print("goal is = ", self.q_g_r )
         # result = setGoalClient(self.q_g_r, current_pose_listener )
-        self.agent_prevpose_map = np.copy(self.o_r_map)
+        self.agent_prevpose_map = np.copy(self.o_r_map)     # NEEDS TO COME AFTER goal_on_circle_wrt_lm
         # if result:
         #     rospy.loginfo("Goal execution done!")
         #     self.num_steps += 1

@@ -19,9 +19,10 @@
     </node>
 
     <node name="image_scan_filter" pkg="laser_filters" type="scan_to_scan_filter_chain" output="screen">
+        <!-- <param name="video_device" value="/dev/video0" /> -->
         <rosparam command="load" file="$(find bender_perception)/config/scan_filter_config.yaml" />
-        <remap from="scan" to="bender_perception/scan_from_image" />
-        <remap from="scan_filtered" to="bender_perception/scan_from_image_filtered" />
+        <remap from="scan" to="bender_perception/scan_from_image" />            <!-- goes to move_base-->
+        <remap from="scan_filtered" to="bender_perception/scan_from_image_filtered" />  <!-- goes to move_base-->
     </node>
 
 </launch>

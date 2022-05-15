@@ -13,8 +13,8 @@ from actionlib_msgs.msg import GoalStatus
 from geometry_msgs.msg import Pose, Point, Quaternion, PoseStamped
 
 GPS_GOAL = [[50, 50, 0]]
-# GOAL = "gps"
-GOAL = "arc"
+GOAL = "gps"
+# GOAL = "arc"
 
 def transform_goal_to_map(delta_map):
 
@@ -91,6 +91,7 @@ if __name__ == '__main__':
         elif GOAL == "gps":
 
             current_gps_goal    = create_pose_stamp(GPS_GOAL[gps_goal_count], 'base_footprint')
+            #IF THE GOAL IS NOT WRT THE FOOTPRINT FRAME, TRANSFORM TO FOOTPRINT HERE AND PASS TO setGoalClient
             result              = setGoalClient(current_gps_goal, current_pose_listener)
 
             # if result:

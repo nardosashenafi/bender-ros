@@ -1,0 +1,34 @@
+<launch>
+
+    <arg name="show_output"   default="false" />
+    <!-- <arg name="groundtruth" default="false"/> -->
+    <arg name="gui" default="false"/>
+    <arg name="rviz" default="true"/>
+    <arg name="x" default="-2"/>
+    <arg name="y" default="-21.5"/>
+    <arg name="yaw" default="3.14"/>
+    <!-- <arg name="teleop" default="rqt" doc="[rqt, joy, none]"/>  -->
+
+    <!-- Static TF (dead reckoning) -->
+    <node name="map_to_base_footprint_tf" unless="$(arg groundtruth)" 
+        pkg="tf2_ros" type="static_transform_publisher" 
+        args="$(arg x) $(arg y) 0 $(arg yaw) 0 0 map odom" output="screen" />
+
+    <!-- Launch the camera and quantization -->
+    <include file="$(find bender_perception)/launch/usb_cam.launch">
+        <arg name="show_output" value="$(arg show_output)" />
+    </include>
+
+    <!-- Launch the camera and quantization -->
+    <include file="$(find rplidar_ros)/launch/test_rplidar.launch">
+        <arg name="show_output" value="$(arg show_output)" />
+    </include>
+
+    <!-- Launch move_base -->
+    <include file="$(find bender_nav)/launch/move_base.launch" />
+    
+    <!-- RViz to visualize robot state -->
+    <node name="$(anon rviz)" if="$(arg rviz)" pkg="rviz" type="rviz" respawn="false" args="-d $(find bender_gazebo)/config/bender_nav.rviz" output="screen"/>
+
+
+</launch>
