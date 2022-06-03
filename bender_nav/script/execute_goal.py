@@ -12,7 +12,8 @@ from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from actionlib_msgs.msg import GoalStatus
 from geometry_msgs.msg import Pose, Point, Quaternion, PoseStamped
 
-GPS_GOAL = [[50, 50, 0]]
+#TODO: Define GPS waypoints in meters wrt the robot's initial pose
+GPS_GOAL_WRT_ROBOTINITIALPOSE = [[10, 10]]        #in meters wrt the robot's initial pose
 GOAL = "gps"
 # GOAL = "arc"
 
@@ -32,7 +33,7 @@ def transform_goal_to_map(delta_map):
     # goal.target_pose.pose.position.z = delta_map[2]
 
     #pass goal with normalized quaternion
-    #TODO: sign of the (xr-min_cost) depends on the heading of the robot wrt the local map indices.
+    #CHECK: sign of the (xr-min_cost) depends on the heading of the robot wrt the local map indices.
     #Replace the negative sign with dot product between the robot's heading and local map indexing
     goal.target_pose.pose.orientation = Quaternion(*(tf.transformations.quaternion_from_euler(0,0,3.1415, axes='sxyz')))
 
@@ -90,13 +91,16 @@ if __name__ == '__main__':
             #     rospy.loginfo("Goal execution done!")
         elif GOAL == "gps":
 
-            current_gps_goal    = create_pose_stamp(GPS_GOAL[gps_goal_count], 'base_footprint')
-            #IF THE GOAL IS NOT WRT THE FOOTPRINT FRAME, TRANSFORM TO FOOTPRINT HERE AND PASS TO setGoalClient
+            #TODO: Subscribe to current state of the robot (how far it has moved from the initial pose)
+            current_state       = [0.0,0.0]
+            GPS_GOAL            = GPS_GOAL_WRT_ROBOTINITIALPOSE[gps_goal_count] - current_state
+            current_gps_goal    = create_pose_stamp(GPS_GOAL, 'base_footprint')
+
             result              = setGoalClient(current_gps_goal, current_pose_listener)
 
-            # if result:
-            #     rospy.loginfo("Goal execution done!")      
-            #     gps_goal_count += 1        
+            if result:
+                rospy.loginfo("Goal execution done!")      
+                gps_goal_count += 1        
 
         rospy.sleep(10)
 
